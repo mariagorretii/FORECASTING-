@@ -1,0 +1,175 @@
+R version 4.4.2 (2024-10-31 ucrt) -- "Pile of Leaves"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> # LOAD DATA AIRPLANE PASSENGERS
+> data<-read.csv(file.choose(),header=T,sep=",")
+> attach(data)
+> 
+> # UBAH DATA DALAM BENTUK TIME SERIES
+> ts_data <- ts(data$total_passengers, start = c(1949,1), frequency = 12)
+> plot.ts(ts_data)
+> 
+> # IDENTIFIKASI MODEL
+> library(tseries)
+> acf(ts_data)
+> pacf(ts_data)
+> # melalui plot data dan juga plot acf dan pacf, terlihat bahwa data belum stasioner. maka akan dilakukan proses differencing untuk membentuk data yang stasioner.
+> 
+> # MEMBAGI DATA TRAIN DAN TEST
+> train <- window(ts_data, end = c(1959,12))
+> test <- window(ts_data, start = c(1960,1))
+> plot.ts(train)
+> 
+> ## MENGAMBIL NILAI LOGARITMA PADA DATA TRAIN KARENA PLOT DATA MEMILIKI FLUKTUASI YANG BESAR
+> logtrain <- log(train)
+> difflogtrain1<-diff(logtrain)
+> difflogtrain1<-diff(logtrain, n=1)
+> plot.ts(difflogtrain1)
+> acf(difflogtrain1)
+> pacf(difflogtrain1)
+> # terlihat dari grafik ACF dan PACF data non musiman sudah stasioner, namun data musiman belum stasioner hal ini terlihat pada grafik ACF dan PACF di perulangan 12. Sehingga perlu dilakukan differencing 1 kali lagi terhadap data
+> difflogtrain2<-diff(difflogtrain1, 12)
+> acf(difflogtrain2, lag.max=25)
+> # dari grafik ACF di atas, dapat dilihat bahwa q = 3
+> pacf(difflogtrain2, lag.max=25)
+> # dari grafik PACF di atas, dapat dilihat bahwa p = 3
+> # sehingga untuk data non musiman didapatkan p = 3. d = 1, dan q = 1
+> 
+> # UNTUK DATA MUSIMAN TERLIHAT DARI GRAFIK ACF DAN PACF SEBELUMNYA DIDAPTKAN: P = 1, D = 1, DAN Q = 1.
+> 
+> # memodelkan SARIMA
+> library(forecast)
+>  results <- data.frame(Model = character(),
++  AIC = numeric(),
++ Shapiro_p = numeric(), LjungBox_p = numeric(),stringsAsFactors = FALSE)
+> p_vals <- 0:3
+> d_vals <- 1
+> q_vals <- 0:3
+> 
+> P_vals <- 0:1
+> D_vals <- 1
+> Q_vals <- 0:1
+> 
+>  for (p in p_vals) {
++  for (d in d_vals) {
++  for (q in q_vals) {
++  for (P in P_vals) {
++  for (D in D_vals) {
++  for (Q in Q_vals) {
++ 
++  fit <- tryCatch({
++  Arima(ts_data,
++  order = c(p,d,q),
++  seasonal = list(order = c(P,D,Q), period = 12))
++  }, error = function(e) NULL)
++ 
++ if (!is.null(fit)) {
++ res <- residuals(fit)
++ aic_val <- AIC(fit)
++ shapiro_p <- tryCatch({ shapiro.test(res)$p.value},  error = function(e) NA)
++ ljung_p <- tryCatch({Box.test(res, lag = 12, type = "Ljung-Box")$p.value}, error = function(e) NA)
++ results <- rbind(results, data.frame( Model = paste0("(",p,",",d,",",q,")(", P,",",D,",",Q,")[12]"),
++ AIC = aic_val, Shapiro_p = shapiro_p, LjungBox_p = ljung_p))}}}}}}}
+> results
+                Model      AIC    Shapiro_p  LjungBox_p
+1  (0,1,0)(0,1,0)[12] 1031.508 0.0008205432 0.001661572
+2  (0,1,0)(0,1,1)[12] 1030.752 0.0003533944 0.004930218
+3  (0,1,0)(1,1,0)[12] 1030.408 0.0003165888 0.003639875
+4  (0,1,0)(1,1,1)[12] 1032.128 0.0003909478 0.002467101
+5  (0,1,1)(0,1,0)[12] 1020.639 0.0210384710 0.362805121
+6  (0,1,1)(0,1,1)[12] 1021.003 0.0124965098 0.433473603
+7  (0,1,1)(1,1,0)[12] 1020.425 0.0092157513 0.396972865
+8  (0,1,1)(1,1,1)[12] 1020.328 0.0121919462 0.553960938
+9  (0,1,2)(0,1,0)[12] 1022.627 0.0192723141 0.365207876
+10 (0,1,2)(0,1,1)[12] 1023.001 0.0122292033 0.435587826
+11 (0,1,2)(1,1,0)[12] 1022.425 0.0090916449 0.398439997
+12 (0,1,2)(1,1,1)[12] 1022.327 0.0120438393 0.549615202
+13 (0,1,3)(0,1,0)[12] 1020.204 0.0258506934 0.614617874
+14 (0,1,3)(0,1,1)[12] 1020.806 0.0096166196 0.618165550
+15 (0,1,3)(1,1,0)[12] 1020.362 0.0080570773 0.566754113
+16 (0,1,3)(1,1,1)[12] 1020.618 0.0063819926 0.608836258
+17 (1,1,0)(0,1,0)[12] 1020.394 0.0132338621 0.382807470
+18 (1,1,0)(0,1,1)[12] 1020.914 0.0064880830 0.459108468
+19 (1,1,0)(1,1,0)[12] 1020.393 0.0049389132 0.425498802
+20 (1,1,0)(1,1,1)[12] 1020.493 0.0058417258 0.511967944
+21 (1,1,1)(0,1,0)[12] 1022.394 0.0133951687 0.382741672
+22 (1,1,1)(0,1,1)[12] 1022.897 0.0075471423 0.460317621
+23 (1,1,1)(1,1,0)[12] 1022.356 0.0056197565 0.425891667
+24 (1,1,1)(1,1,1)[12] 1022.300 0.0105242456 0.554201139
+25 (1,1,2)(0,1,0)[12] 1024.161 0.0168113944 0.419495090
+26 (1,1,2)(0,1,1)[12] 1024.718 0.0098878250 0.476762719
+27 (1,1,2)(1,1,0)[12] 1021.178 0.0093378247 0.394538867
+28 (1,1,2)(1,1,1)[12] 1020.719 0.0145530216 0.554438359
+29 (1,1,3)(0,1,0)[12] 1019.253 0.0020289929 0.475124923
+30 (1,1,3)(0,1,1)[12] 1019.533 0.0009629784 0.654124120
+31 (1,1,3)(1,1,0)[12] 1019.134 0.0008762347 0.644399366
+32 (1,1,3)(1,1,1)[12] 1019.960 0.0015070566 0.684090244
+33 (2,1,0)(0,1,0)[12] 1022.394 0.0132924756 0.382784937
+34 (2,1,0)(0,1,1)[12] 1022.905 0.0069761016 0.459837003
+35 (2,1,0)(1,1,0)[12] 1022.373 0.0051026092 0.426175296
+36 (2,1,0)(1,1,1)[12] 1022.391 0.0079680765 0.534849827
+37 (2,1,1)(0,1,0)[12] 1017.848 0.0051645667 0.531244459
+38 (2,1,1)(0,1,1)[12] 1018.360 0.0032383665 0.658872292
+39 (2,1,1)(1,1,0)[12] 1017.915 0.0029951089 0.643425611
+40 (2,1,1)(1,1,1)[12] 1018.249 0.0035247214 0.726956433
+41 (2,1,2)(0,1,0)[12] 1019.291 0.0039933225 0.576622583
+42 (2,1,2)(0,1,1)[12] 1019.936 0.0026159408 0.677846894
+43 (2,1,2)(1,1,0)[12] 1019.547 0.0024166958 0.659052831
+44 (2,1,2)(1,1,1)[12] 1024.804 0.0012854774 0.090736976
+45 (2,1,3)(0,1,0)[12] 1019.797 0.0049512059 0.875908594
+46 (2,1,3)(0,1,1)[12] 1020.964 0.0038254154 0.882966702
+47 (2,1,3)(1,1,0)[12] 1020.629 0.0036523544 0.856013427
+48 (2,1,3)(1,1,1)[12] 1020.092 0.0016137590 0.880278124
+49 (3,1,0)(0,1,0)[12] 1023.666 0.0173561179 0.482096978
+50 (3,1,0)(0,1,1)[12] 1024.441 0.0082647514 0.489224332
+51 (3,1,0)(1,1,0)[12] 1024.004 0.0060694755 0.445516614
+52 (3,1,0)(1,1,1)[12] 1024.142 0.0065106612 0.541977291
+53 (3,1,1)(0,1,0)[12] 1019.085 0.0034730120 0.561962287
+54 (3,1,1)(0,1,1)[12] 1019.697 0.0019268302 0.673073354
+55 (3,1,1)(1,1,0)[12] 1019.328 0.0017078361 0.655764766
+56 (3,1,1)(1,1,1)[12] 1019.953 0.0020860077 0.705765377
+57 (3,1,2)(0,1,0)[12] 1017.739 0.0066903729 0.520525714
+58 (3,1,2)(0,1,1)[12] 1018.383 0.0056135614 0.695086087
+59 (3,1,2)(1,1,0)[12] 1021.915 0.0030042993 0.642934736
+60 (3,1,2)(1,1,1)[12] 1021.932 0.0020776904 0.705233218
+61 (3,1,3)(0,1,0)[12] 1015.581 0.0341188234 0.403130647
+62 (3,1,3)(0,1,1)[12] 1014.326 0.0196475125 0.813713969
+63 (3,1,3)(1,1,0)[12] 1013.693 0.0170289342 0.811283408
+64 (3,1,3)(1,1,1)[12] 1015.290 0.0216572491 0.768243873
+> 
+> ## UJI DIAGNOSTIK
+> # ambil model dengan kondisi terbaik( AIC KECIL, RESIDUAL BERDISTRIBUSI NORMAL, DAN WHITE NOISE)
+> valid_models <- subset(results,LjungBox_p > 0.05 & !is.na(LjungBox_p))
+> valid_models <- valid_models[order(valid_models$AIC), ]
+> best_model_info <- valid_models[1, ]
+>  best_model_info
+                Model      AIC  Shapiro_p LjungBox_p
+   (3,1,3)(1,1,0)[12] 1013.693 0.01702893  0.8112834
+> library(astsa)
+> ## sarima.for(logtrain,n.ahead=5,3,1,3,1,1,0,12)
+> pred_log = sarima.for(logtrain,n.ahead=5,3,1,3,1,1,0,12)
+> 
+> ## mengubah nilai log data train menjadi nilai asli
+> pred_values_log <- pred_log$pred
+> pred_asli <- exp(pred_values_log)
+> 
+> 
+> ## MENGECEK KEBAIKAN MODEL
+> accuracy(pred_asli, test)
+                ME     RMSE      MAE       MPE     MAPE       ACF1 Theil's U
+Test set -7.495639 19.52866 12.83291 -1.875311 3.028672 -0.2781156 0.7912403
